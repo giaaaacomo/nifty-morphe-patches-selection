@@ -1,0 +1,54 @@
+{
+  "version": "v0.2",
+  "patches": [
+    {
+      "name": "Force notification grouping",
+      "description": "Forces Instagram notifications into one group, or into separate groups by notification category.",
+      "default": false,
+      "dependencies": [
+        "BytecodePatch"
+      ],
+      "compatiblePackages": [
+        {
+          "packageName": "com.instagram.android",
+          "name": "Instagram",
+          "description": null,
+          "apkFileType": "APKM",
+          "appIconColor": "#FC483C",
+          "signatures": null,
+          "targets": [
+            {
+              "version": "426.0.0.37.68",
+              "isExperimental": false,
+              "minSdk": 28,
+              "description": null
+            }
+          ]
+        }
+      ],
+      "options": [
+        {
+          "key": "groupingMode",
+          "title": "Grouping mode",
+          "description": "Choose whether every Instagram notification uses one notification group or separate groups by category.",
+          "required": true,
+          "type": "kotlin.String",
+          "default": "all",
+          "values": {
+            "all": "All notifications",
+            "category": "By category"
+          }
+        },
+        {
+          "key": "debugLogging",
+          "title": "Debug logging",
+          "description": "Print notification grouping decisions to logcat.",
+          "required": false,
+          "type": "kotlin.Boolean",
+          "default": false,
+          "values": null
+        }
+      ]
+    }
+  ]
+}
