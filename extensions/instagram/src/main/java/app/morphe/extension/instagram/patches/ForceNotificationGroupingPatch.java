@@ -8,8 +8,12 @@ package app.morphe.extension.instagram.patches;
 
 import android.app.Notification;
 import android.app.Notification.Builder;
+import android.app.NotificationChannel;
 import android.app.NotificationManager;
+import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
@@ -25,8 +29,13 @@ public class ForceNotificationGroupingPatch {
     private static final String GROUP_PREFIX = GROUP_ALL + ".";
     private static final String LOG_TAG = "MorpheIgNotifGroup";
     private static final String SUMMARY_TAG = "morphe.instagram.notification_group_summary";
+    private static final String TEST_ACTION = "app.morphe.instagram.NOTIFICATION_GROUPING_TEST";
+    private static final String TEST_CHANNEL_ID = "morphe_notification_grouping_test";
+    private static final String TEST_TAG = "morphe.instagram.notification_grouping_test";
     private static final int SUMMARY_ID_BASE = 0x4d4f5247;
+    private static final int TEST_ID_BASE = 0x4d4f5400;
     private static volatile Context applicationContext;
+    private static volatile boolean testReceiverRegistered;
 
     /**
      * Patched at build time from the patch option.
@@ -51,6 +60,7 @@ public class ForceNotificationGroupingPatch {
         }
 
         applicationContext = context.getApplicationContext();
+        registerTestReceiver(applicationContext);
         debug("Initialized notification grouping context");
     }
 
@@ -211,6 +221,122 @@ public class ForceNotificationGroupingPatch {
 
     private static int summaryIdFor(String groupKey) {
         return SUMMARY_ID_BASE ^ groupKey.hashCode();
+    }
+
+    private static void registerTestReceiver(Context context) {
+        if (!debugLogging() || testReceiverRegistered) {
+            return;
+        }
+
+        try {
+            IntentFilter filter = new IntentFilter(TEST_ACTION);
+            if (Build.VERSION.SDK_INT >= 33) {
+                context.registerReceiver(TEST_RECEIVER, filter, Context.RECEIVER_EXPORTED);
+            } else {
+                context.registerReceiver(TEST_RECEIVER, filter);
+            }
+            testReceiverRegistered = true;
+            debug("Registered notification grouping test receiver: " + TEST_ACTION);
+        } catch (Throwable error) {
+            debug("Test receiver registration failed: " + error);
+        }
+    }
+
+    private static final BroadcastReceiver TEST_RECEIVER = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (intent == null || !TEST_ACTION.equals(intent.getAction())) {
+                return;
+            }
+
+            if (intent.getBooleanExtra("clear", false)) {
+                clearTestNotifications(context);
+                return;
+            }
+
+            int count = Math.max(1, Math.min(intent.getIntExtra("count", 5), 20));
+            boolean grouped = intent.getBooleanExtra("grouped", true);
+            postTestNotifications(context, count, grouped);
+        }
+    };
+
+    private static void postTestNotifications(Context context, int count, boolean grouped) {
+        NotificationManager manager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+        if (manager == null) {
+            debug("Skipping test notifications: missing notification manager");
+            return;
+        }
+
+        ensureTestChannel(manager);
+        clearTestNotifications(context);
+
+        for (int i = 0; i < count; i++) {
+            try {
+                Builder builder;
+                if (Build.VERSION.SDK_INT >= 26) {
+                    builder = new Builder(context, TEST_CHANNEL_ID);
+                } else {
+                    builder = new Builder(context);
+                }
+
+                builder.setSmallIcon(context.getApplicationInfo().icon);
+                builder.setContentTitle("Morphe IG test " + (i + 1));
+                builder.setContentText(i % 2 == 0 ? "Ti ha inviato un messaggio" : "Ha messo mi piace al tuo post");
+                builder.setWhen(System.currentTimeMillis() + i);
+                builder.setShowWhen(true);
+                builder.setLocalOnly(true);
+                builder.setAutoCancel(true);
+
+                Notification notification = builder.build();
+                if (grouped) {
+                    notification = beforeNotify(notification);
+                }
+
+                manager.notify(TEST_TAG, TEST_ID_BASE + i, notification);
+            } catch (Throwable error) {
+                debug("Posting test notification " + i + " failed: " + error);
+            }
+        }
+
+        debug("Posted " + count + " test notifications, grouped=" + grouped);
+    }
+
+    private static void clearTestNotifications(Context context) {
+        NotificationManager manager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+        if (manager == null) {
+            return;
+        }
+
+        for (int i = 0; i < 20; i++) {
+            manager.cancel(TEST_TAG, TEST_ID_BASE + i);
+        }
+
+        manager.cancel(SUMMARY_TAG, summaryIdFor(GROUP_ALL));
+        manager.cancel(SUMMARY_TAG, summaryIdFor(GROUP_PREFIX + "messages"));
+        manager.cancel(SUMMARY_TAG, summaryIdFor(GROUP_PREFIX + "interactions"));
+        manager.cancel(SUMMARY_TAG, summaryIdFor(GROUP_PREFIX + "content"));
+        manager.cancel(SUMMARY_TAG, summaryIdFor(GROUP_PREFIX + "account"));
+        manager.cancel(SUMMARY_TAG, summaryIdFor(GROUP_PREFIX + "other"));
+        debug("Cleared test notifications");
+    }
+
+    private static void ensureTestChannel(NotificationManager manager) {
+        if (Build.VERSION.SDK_INT < 26) {
+            return;
+        }
+
+        NotificationChannel existingChannel = manager.getNotificationChannel(TEST_CHANNEL_ID);
+        if (existingChannel != null) {
+            return;
+        }
+
+        NotificationChannel channel = new NotificationChannel(
+                TEST_CHANNEL_ID,
+                "Morphe notification grouping test",
+                NotificationManager.IMPORTANCE_DEFAULT
+        );
+        channel.setDescription("Temporary notifications used to test Morphe Instagram notification grouping.");
+        manager.createNotificationChannel(channel);
     }
 
     private static String groupKeyFor(Notification notification) {
