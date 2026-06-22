@@ -12,6 +12,7 @@ import app.morphe.patcher.patch.booleanOption
 import app.morphe.patcher.patch.bytecodePatch
 import app.morphe.patcher.patch.stringOption
 import app.morphe.patches.instagram.misc.extension.sharedExtensionPatch
+import app.morphe.patches.instagram.misc.extension.hooks.instagramInitHook
 import app.morphe.patches.instagram.shared.Constants.COMPATIBILITY_INSTAGRAM
 import app.morphe.util.findMutableMethodOf
 import app.morphe.util.returnEarly
@@ -27,6 +28,9 @@ private const val MODE_CATEGORY = "category"
 
 private const val FRAMEWORK_NOTIFICATION_BUILDER =
     "Landroid/app/Notification\$Builder;"
+
+private const val FRAMEWORK_NOTIFICATION_MANAGER =
+    "Landroid/app/NotificationManager;"
 
 private val compatNotificationBuilders = setOf(
     "Landroidx/core/app/NotificationCompat\$Builder;",
@@ -67,6 +71,9 @@ val forceNotificationGroupingPatch = bytecodePatch(
     execute {
         GroupingModeFingerprint.method.returnEarly(groupingMode.value!!)
         DebugLoggingFingerprint.method.returnEarly(debugLogging.value!!)
+        with(this) {
+            instagramInitHook.invoke(EXTENSION_CLASS)
+        }
 
         var patchedCallSites = 0
 
@@ -85,6 +92,7 @@ val forceNotificationGroupingPatch = bytecodePatch(
                 val hookTargets = implementation.instructions
                     .mapIndexedNotNull { index, instruction ->
                         notificationBuilderHookTarget(index, instruction)
+                            ?: notificationManagerHookTarget(index, instruction)
                     }
 
                 if (hookTargets.isEmpty()) {
@@ -159,4 +167,57 @@ private fun notificationBuilderHookTarget(index: Int, instruction: Instruction):
 
         else -> null
     }
+}
+
+private fun notificationManagerHookTarget(index: Int, instruction: Instruction): HookTarget? {
+    if (instruction.opcode != Opcode.INVOKE_VIRTUAL) {
+        return null
+    }
+
+    val reference = (instruction as? ReferenceInstruction)
+        ?.reference as? MethodReference
+        ?: return null
+
+    if (
+        reference.definingClass != FRAMEWORK_NOTIFICATION_MANAGER ||
+        reference.returnType != "V"
+    ) {
+        return null
+    }
+
+    val notificationParameterIndex = reference.parameterTypes
+        .indexOf("Landroid/app/Notification;")
+
+    if (
+        notificationParameterIndex == -1 ||
+        reference.name !in setOf("notify", "notifyAsPackage", "notifyAsUser")
+    ) {
+        return null
+    }
+
+    val notificationRegister = invocationRegisters(instruction, reference.parameterTypes.size + 1)
+        .getOrNull(notificationParameterIndex + 1)
+        ?: return null
+
+    return HookTarget(
+        index,
+        """
+            invoke-static/range { v$notificationRegister .. v$notificationRegister }, $EXTENSION_CLASS->beforeNotify(Landroid/app/Notification;)Landroid/app/Notification;
+            move-result-object v$notificationRegister
+        """
+    )
+}
+
+private fun invocationRegisters(instruction: Instruction, count: Int): List<Int> = when (instruction) {
+    is FiveRegisterInstruction -> listOf(
+        instruction.registerC,
+        instruction.registerD,
+        instruction.registerE,
+        instruction.registerF,
+        instruction.registerG,
+    ).take(count)
+
+    is RegisterRangeInstruction -> (instruction.startRegister until instruction.startRegister + count).toList()
+
+    else -> emptyList()
 }
