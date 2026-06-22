@@ -54,6 +54,13 @@ public class ForceNotificationGroupingPatch {
     /**
      * Called from Instagram's application bootstrap.
      */
+    public static void setContext(Context context) {
+        initialize(context);
+    }
+
+    /**
+     * Called from Instagram's application bootstrap.
+     */
     public static void initialize(Context context) {
         if (context == null) {
             return;
