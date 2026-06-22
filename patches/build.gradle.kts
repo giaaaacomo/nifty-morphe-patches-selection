@@ -58,7 +58,7 @@ tasks {
     register<JavaExec>("generatePatchesList") {
         description = "Build patch with patch list"
 
-        dependsOn(build)
+        dependsOn("buildAndroid")
 
         classpath = sourceSets["main"].runtimeClasspath
         mainClass.set("app.morphe.util.PatchListGeneratorKt")
