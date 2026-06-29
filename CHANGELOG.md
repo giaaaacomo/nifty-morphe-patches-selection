@@ -1,3 +1,9 @@
+## [0.3.0](https://github.com/giaaaacomo/nifty-patches-selection/compare/v0.2.5...v0.3.0) (2026-06-29)
+
+### ✨ New Features
+
+* **build:** adopt standalone patch template ([263965a](https://github.com/giaaaacomo/nifty-patches-selection/commit/263965a186dbbacbacf2ced76aa13427a592599e))
+
 ## [0.3.0-dev.1](https://github.com/giaaaacomo/nifty-patches-selection/compare/v0.2.5...v0.3.0-dev.1) (2026-06-29)
 
 ### ✨ New Features
