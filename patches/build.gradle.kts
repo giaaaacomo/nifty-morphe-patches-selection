@@ -1,14 +1,14 @@
-group = "app.template"
+group = "io.github.giaaaacomo.nifty"
 
 patches {
     about {
-        name = "UserXYZ Patches"
-        description = "Patches for apps I like"
-        source = "git@github.com:UserXYZ/morphe-patches.git"
-        author = "Awesome dev"
+        name = "giaaaacomo's Nifty Patches Selection"
+        description = "A focused collection of custom patches for use with Morphe"
+        source = "https://github.com/giaaaacomo/nifty-patches-selection"
+        author = "giaaaacomo"
         contact = "na"
-        website = "na"
-        license = "GPLv3"
+        website = "https://github.com/giaaaacomo/nifty-patches-selection"
+        license = "GPLv3 with additional GPLv3 Section 7 terms"
     }
 }
 
@@ -25,6 +25,9 @@ val patchListGeneratorClasspath: Configuration by configurations.creating
 dependencies {
     compileOnly(libs.gson)
     patchListGeneratorClasspath(libs.gson)
+    implementation(libs.morphe.patches.library) {
+        exclude(group = "com.google.code.gson", module = "gson")
+    }
 }
 
 tasks {
